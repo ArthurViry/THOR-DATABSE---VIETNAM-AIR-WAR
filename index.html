@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>THOR — Vietnam Air War</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Oswald:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--bg:#f0ece3;--surface:#fff;--surface2:#f4f0e8;--surface3:#eae4d8;--border:#d8d0c0;--border2:#c4b8a4;--accent:#9e3408;--accent2:#c8780a;--accent3:#3d5e38;--text:#18140e;--text-dim:#5e5244;--text-light:#8a7e6e;--dark:#0a0c0e;--dark2:#111418;--panel-w:340px;--stats-w:440px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);color:var(--text);font-family:'Oswald',sans-serif;font-weight:300;font-size:14px;overflow-x:hidden;}
+
+    #loader{position:fixed;inset:0;background:var(--dark);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:20px;}
+    #loader h2{font-family:'Share Tech Mono',monospace;font-size:14px;color:var(--accent2);letter-spacing:3px;}
+    .lbar-wrap{width:300px;height:2px;background:#2a3040;}
+    .lbar{height:100%;background:var(--accent2);width:0%;transition:width 0.3s;}
+    #loader-msg{font-family:'Share Tech Mono',monospace;font-size:12px;color:#6b7280;}
+
+    /* HEADER BAND 1 */
+    #header{background:var(--dark);color:#fff;padding:12px 28px;display:flex;align-items:center;gap:24px;border-bottom:2px solid var(--accent);min-height:72px;}
+    .hdr-title{display:flex;flex-direction:column;min-width:200px;}
+    .hdr-tag{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent2);letter-spacing:3px;}
+    #header h1{font-size:30px;font-weight:700;letter-spacing:1px;line-height:1.1;}
+    #header h1 span{color:var(--accent2);}
+    #kpi-bar{display:flex;flex:1;}
+    .kpi{display:flex;flex-direction:column;padding:0 22px;border-right:1px solid #2a3040;}
+    .kpi-val{font-family:'Share Tech Mono',monospace;font-size:22px;color:var(--accent2);line-height:1.1;}
+    .kpi-lbl{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;}
+
+    /* NAV BAND */
+    #nav-band{background:var(--dark2);border-bottom:1px solid #2a3040;display:flex;padding:0 28px;}
+    .nav-tab{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:2px;padding:11px 20px;cursor:pointer;color:#6b7280;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap;}
+    .nav-tab:hover{color:#d4cfc8;}
+    .nav-tab.active{color:var(--accent2);border-bottom-color:var(--accent2);}
+
+    #pages{}
+    .page{display:none;flex-direction:column;}
+    .page.active{display:flex;}
+
+    /* ══ DATAVIZ PAGE ══ */
+    #page-dataviz{flex-direction:row;height:calc(100vh - 112px);}
+
+    /* FILTER PANEL */
+    #filter-panel{width:var(--panel-w);min-width:var(--panel-w);background:var(--surface);border-right:2px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;}
+    #filter-panel::-webkit-scrollbar{width:3px;}
+    #filter-panel::-webkit-scrollbar-thumb{background:var(--border2);}
+
+    .panel-top{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface2);}
+    .panel-top-row{font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:3px;color:var(--accent);display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+    .panel-count{background:var(--accent);color:#fff;padding:2px 7px;font-size:10px;border-radius:2px;font-family:'Share Tech Mono',monospace;}
+    .upd-dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);opacity:0;transition:opacity 0.2s;}
+    .upd-dot.on{opacity:1;}
+    .btn-reset-all{width:100%;padding:7px;background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;border-radius:2px;transition:all 0.12s;text-transform:uppercase;}
+    .btn-reset-all:hover{border-color:var(--accent);color:var(--accent);}
+
+    /* Collapsible sections */
+    .fs{border-bottom:1px solid var(--border);}
+    .fs-head{display:flex;align-items:center;gap:6px;padding:9px 14px;cursor:pointer;background:var(--surface);user-select:none;transition:background 0.1s;}
+    .fs-head:hover{background:var(--surface2);}
+    .fs-title{font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;flex:1;}
+    .fs-badge{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent2);}
+    .fs-arrow{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);transition:transform 0.2s;margin-left:2px;}
+    .fs.open .fs-arrow{transform:rotate(90deg);}
+    .fs-body{display:none;padding:8px 14px 10px;}
+    .fs.open .fs-body{display:block;}
+
+    /* iOS switch */
+    .sw{position:relative;width:38px;height:21px;flex-shrink:0;}
+    .sw input{opacity:0;width:0;height:0;position:absolute;}
+    .sw-sl{position:absolute;cursor:pointer;inset:0;background:#bbb;border-radius:21px;transition:.25s;}
+    .sw-sl:before{position:absolute;content:"";height:15px;width:15px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.25s;}
+    input:checked+.sw-sl{background:var(--accent);}
+    input:checked+.sw-sl:before{transform:translateX(17px);}
+
+    .filter-lbl{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;}
+    .filter-lbl:first-child{margin-top:0;}
+    .fc{font-family:'Share Tech Mono',monospace;color:var(--accent2);font-size:10px;}
+
+    /* Date inputs */
+    .date-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+    .date-lbl{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-light);min-width:22px;}
+    .yr-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:'Share Tech Mono',monospace;font-size:14px;border-radius:2px;width:105px;text-align:center;}
+    .yr-input:focus{outline:1px solid var(--accent);}
+
+    .check-list{display:flex;flex-direction:column;gap:2px;max-height:120px;overflow-y:auto;padding-right:2px;}
+    .check-list.tall{max-height:155px;}
+    .check-list::-webkit-scrollbar{width:3px;}
+    .check-list::-webkit-scrollbar-thumb{background:var(--border);}
+    .check-item{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:3px 5px;border-radius:2px;transition:background 0.1s;}
+    .check-item:hover{background:var(--surface2);}
+    .check-item-left{display:flex;align-items:center;gap:5px;}
+    .check-item input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:12px;height:12px;flex-shrink:0;}
+    .check-item span{font-size:12px;color:var(--text);line-height:1.3;}
+    .check-count{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-light);background:var(--surface2);padding:1px 4px;border-radius:2px;}
+
+    select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 8px;font-family:'Oswald',sans-serif;font-size:13px;border-radius:2px;cursor:pointer;appearance:none;margin-top:2px;}
+    select:focus{outline:1px solid var(--accent);}
+
+    .toggle-row{display:flex;gap:3px;flex-wrap:wrap;}
+    .toggle-btn{flex:1;padding:6px 4px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer;border-radius:2px;transition:all 0.12s;text-align:center;letter-spacing:1px;min-width:60px;}
+    .toggle-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+    /* Color-by */
+    #color-by-section{padding:8px 14px;border-bottom:1px solid var(--border);}
+
+    /* MAP */
+    #map-wrap{flex:1;position:relative;overflow:hidden;}
+    #map{width:100%;height:100%;}
+    .map-lbl{position:absolute;top:8px;left:8px;background:rgba(255,255,255,0.93);border:1px solid var(--border);padding:5px 11px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:2px;z-index:800;pointer-events:none;}
+
+    #bm-switcher{position:absolute;top:8px;right:8px;z-index:800;background:rgba(255,255,255,0.96);border:1px solid var(--border);border-radius:3px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.12);}
+    .bm-btn{display:block;width:100%;padding:6px 13px;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;border:none;background:transparent;color:var(--text-dim);text-align:left;transition:all 0.12s;}
+    .bm-btn:hover{background:var(--surface2);} .bm-btn.active{background:var(--accent);color:#fff;}
+
+
+    #map-layers{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:800;display:flex;gap:4px;background:rgba(255,255,255,0.96);border:1px solid var(--border);border-radius:3px;padding:6px 10px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+    .layer-check{display:flex;align-items:center;gap:5px;cursor:pointer;padding:3px 7px;border-radius:2px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim);border:1px solid transparent;transition:all 0.12s;user-select:none;}
+    .layer-check.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+
+    /* Legend stack — flux legend sits above color legend */
+    #legend-stack{position:absolute;bottom:50px;right:8px;z-index:801;display:flex;flex-direction:column;gap:6px;align-items:flex-end;}
+    #map-legend{background:rgba(255,255,255,0.97);border:1px solid var(--border);border-radius:3px;padding:12px 14px;min-width:190px;max-width:220px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+    #map-legend.hidden{display:none;}
+    .legend-title{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--accent);letter-spacing:2px;margin-bottom:8px;text-transform:uppercase;}
+    .legend-item{display:flex;align-items:center;gap:9px;margin-bottom:6px;}
+    .legend-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;}
+    .legend-lbl{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text-dim);}
+
+
+    /* STATS PANEL */
+    #stats-panel{width:var(--stats-w);background:var(--surface);border-left:2px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;transition:width 0.25s ease;flex-shrink:0;}
+    #stats-panel.collapsed{width:0;min-width:0;overflow:hidden;border:none;}
+    #stats-panel::-webkit-scrollbar{width:3px;}
+    #stats-panel::-webkit-scrollbar-thumb{background:var(--border2);}
+    #stats-toggle-btn{position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:801;background:var(--accent);border:none;color:#fff;font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;padding:10px 5px;border-radius:3px 0 0 3px;writing-mode:vertical-rl;letter-spacing:2px;box-shadow:-2px 0 6px rgba(0,0,0,0.15);}
+
+    #sp-active-banner{background:var(--accent);color:#fff;padding:6px 14px;font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:3px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.15);transition:background 0.3s;}
+    #sp-kpi{background:var(--dark);padding:12px 14px;border-bottom:2px solid var(--accent);}
+    .sp-kpi-row{display:flex;flex-wrap:wrap;gap:0;margin-bottom:4px;}
+    .sp-kpi{display:flex;flex-direction:column;padding:5px 10px;border-right:1px solid #2a3040;flex:1;min-width:80px;}
+    .sp-kpi-val{font-family:'Share Tech Mono',monospace;font-size:26px;color:var(--accent2);}
+    .sp-kpi-lbl{font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#6b7280;}
+
+    .sp-sec{border-bottom:1px solid var(--border);}
+    .sp-sec-hd{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;cursor:pointer;background:var(--surface2);user-select:none;}
+    .sp-sec-hd:hover{background:var(--surface3);}
+    .sp-sec-title{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--accent);letter-spacing:2px;}
+    .sp-sec-arr{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);transition:transform 0.2s;}
+    .sp-sec.open .sp-sec-arr{transform:rotate(90deg);}
+    .sp-chart-wrap{display:none;padding:12px 16px;}
+    .sp-sec.open .sp-chart-wrap{display:block;}
+    .sp-chart-wrap svg{width:100%;overflow:visible;}
+
+    /* D3 */
+    .axis path,.axis line{stroke:var(--border);}
+    .axis text{fill:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:12px;}
+    .bar{cursor:pointer;transition:opacity 0.12s;}.bar:hover{opacity:0.72;}
+
+    /* TOOLTIP */
+    #tooltip{position:fixed;background:rgba(10,12,14,0.97);border:1px solid var(--accent2);padding:10px 14px;font-family:'Share Tech Mono',monospace;font-size:12px;color:#d4cfc8;pointer-events:none;z-index:9000;display:none;max-width:280px;line-height:2;}
+    #tooltip b{color:var(--accent2);}
+
+    /* ══ INFO PAGE ══ */
+    #page-info{overflow-y:auto;height:calc(100vh - 112px);}
+    .info-hero{background:var(--dark);color:#fff;padding:50px 80px;display:flex;gap:60px;align-items:flex-start;border-bottom:2px solid var(--accent);}
+    .info-hero-img-ph{width:340px;min-width:340px;height:250px;background:#1a2030;border:2px solid var(--accent2);display:flex;align-items:center;justify-content:center;font-family:'Share Tech Mono',monospace;font-size:10px;color:#6b7280;flex-shrink:0;}
+    .info-hero-text h2{font-size:34px;font-weight:700;margin-bottom:14px;letter-spacing:1px;}
+    .info-hero-text h2 span{color:var(--accent2);}
+    .info-hero-text p{font-size:15px;color:#9ca3af;line-height:1.8;margin-bottom:10px;}
+    .info-body{padding:50px 80px;display:flex;flex-direction:column;gap:36px;}
+    .info-sec h3{font-size:20px;font-weight:600;letter-spacing:1px;margin-bottom:12px;color:var(--accent);border-left:3px solid var(--accent);padding-left:12px;}
+    .info-sec p{font-size:15px;line-height:1.8;color:var(--text-dim);margin-bottom:8px;}
+    .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:8px;}
+    .info-stat{background:var(--surface);border:1px solid var(--border);padding:16px;border-radius:3px;}
+    .info-stat-val{font-family:'Share Tech Mono',monospace;font-size:24px;color:var(--accent2);}
+    .info-stat-lbl{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-top:4px;}
+    .info-footer{background:var(--dark);color:#6b7280;padding:28px 80px;font-family:'Share Tech Mono',monospace;font-size:11px;line-height:2;border-top:2px solid var(--accent);}
+    .info-footer a{color:var(--accent2);text-decoration:none;}.info-footer a:hover{text-decoration:underline;}
+
+    /* ══ ANIM PAGE ══ */
+    #page-anim{height:calc(100vh - 112px);}
+    #anim-maps-row{display:flex;height:calc(100% - 64px);}
+    #anim-map-left,#anim-map-right{flex:1;position:relative;}
+    #anim-map-left{border-right:2px solid var(--border);}
+    .anim-map-label{position:absolute;top:6px;left:6px;z-index:500;background:rgba(10,12,14,0.82);color:var(--accent2);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 9px;border-radius:2px;pointer-events:none;}
+    .anim-switch-btn{position:absolute;bottom:6px;left:6px;z-index:500;background:rgba(10,12,14,0.85);border:1px solid #2a3040;color:#9ca3af;font-family:'Share Tech Mono',monospace;font-size:9px;padding:4px 9px;cursor:pointer;border-radius:2px;transition:all 0.15s;}
+    .anim-switch-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+    #anim-controls{display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--dark);height:64px;flex-wrap:wrap;}
+    #anim-year-display{font-family:'Share Tech Mono',monospace;font-size:24px;color:var(--accent2);min-width:110px;}
+    #anim-progress{flex:1;height:2px;background:#2a3040;overflow:hidden;}
+    #anim-progress-bar{height:100%;background:var(--accent2);width:0%;transition:width 0.3s linear;}
+    .ctrl-btn{background:transparent;border:1px solid #2a3040;color:#9ca3af;font-family:'Share Tech Mono',monospace;font-size:14px;width:34px;height:34px;cursor:pointer;border-radius:2px;transition:all 0.15s;display:flex;align-items:center;justify-content:center;}
+    .ctrl-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+    .speed-btn,.gran-btn{padding:5px 9px;background:transparent;border:1px solid #2a3040;color:#9ca3af;font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;border-radius:2px;transition:all 0.15s;}
+    .speed-btn.active,.gran-btn.active{background:var(--accent2);color:#000;border-color:var(--accent2);}
+    .speed-btn:hover,.gran-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+
+    /* ══ GLOSSARY PAGES ══ */
+    .gloss-page{padding:32px 40px;overflow-y:auto;height:calc(100vh - 112px);}
+    .gloss-search{display:flex;gap:10px;margin-bottom:18px;align-items:center;}
+    .gloss-search input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:12px;border-radius:2px;}
+    .gloss-search input:focus{outline:1px solid var(--accent);}
+    .gloss-fsel{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:12px;border-radius:2px;cursor:pointer;}
+    .gloss-table{width:100%;border-collapse:collapse;font-size:13px;}
+    .gloss-table th{background:var(--dark);color:var(--accent2);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;padding:10px 12px;text-align:left;border-bottom:2px solid var(--accent);}
+    .gloss-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.5;}
+    .gloss-table tr:hover td{background:var(--surface2);}
+    .gloss-table a{color:var(--accent2);text-decoration:none;font-family:'Share Tech Mono',monospace;font-size:10px;}
+    .gloss-table a:hover{text-decoration:underline;}
+    .gbadge{display:inline-block;padding:2px 7px;border-radius:2px;font-family:'Share Tech Mono',monospace;font-size:9px;background:var(--surface2);color:var(--accent);border:1px solid var(--border);}
+
+    ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--surface2);}::-webkit-scrollbar-thumb{background:var(--border2);}
+    .leaflet-popup-content-wrapper{background:rgba(10,12,14,0.97)!important;border:1px solid var(--accent2)!important;border-radius:3px!important;color:#d4cfc8!important;font-family:'Share Tech Mono',monospace!important;font-size:12px!important;line-height:2!important;}
+    .leaflet-popup-tip{background:rgba(10,12,14,0.97)!important;}
+    .leaflet-popup-close-button{color:#9ca3af!important;}
+    .leaflet-popup-content{margin:11px 14px!important;}
+
+    /* Strike Runs gradient legend */
+    #flux-legend{position:absolute;bottom:50px;left:8px;z-index:801;background:rgba(255,255,255,0.97);border:1px solid var(--border);border-radius:3px;padding:10px 14px;min-width:190px;max-width:230px;box-shadow:0 2px 6px rgba(0,0,0,0.1);display:none;}
+    #flux-legend .legend-title{margin-bottom:6px;}
+    .flux-grad-bar{height:10px;border-radius:3px;background:linear-gradient(to right,#fefecc,#fdae61,#d73027);margin:4px 0 2px;}
+    .flux-grad-labels{display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim);}
+
+    /* Polygon selection canvas */
+    #polygon-canvas{position:absolute;inset:0;z-index:900;pointer-events:none;cursor:default;}
+
+    /* Polygon selection tool button */
+    #polygon-select-tool{position:absolute;top:122px;right:8px;z-index:950;background:rgba(255,255,255,0.96);border:1px solid var(--border);border-radius:3px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.12);}
+    .poly-btn{display:flex;align-items:center;gap:6px;width:100%;padding:7px 12px;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;border:none;background:transparent;color:var(--text-dim);text-align:left;transition:all 0.12s;white-space:nowrap;}
+    .poly-btn:hover{background:var(--surface2);}
+    .poly-btn.active{background:var(--accent2);color:#000;font-weight:bold;}
+    .poly-btn svg{flex-shrink:0;}
+    #poly-clear-btn{display:none;border-top:1px solid var(--border);}
+    #poly-clear-btn.active-sel{background:rgba(158,52,8,0.08);}
+  </style>
+</head>
+<body>
+
+<div id="loader"><h2>THOR DATABASE — VIETNAM AIR WAR</h2><div class="lbar-wrap"><div class="lbar" id="loader-bar"></div></div><div id="loader-msg">Initializing...</div></div>
+<div id="tooltip"></div>
+
+<header id="header">
+  <div class="hdr-title"><div class="hdr-tag">// THOR DECLASSIFIED</div><h1>VIETNAM <span>AIR WAR</span></h1></div>
+  <div id="kpi-bar">
+    <div class="kpi"><div class="kpi-val" id="kpi-missions">—</div><div class="kpi-lbl">Missions</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpi-bombs">—</div><div class="kpi-lbl">Tonnes</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpi-weapons">—</div><div class="kpi-lbl">Weapons</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpi-countries">—</div><div class="kpi-lbl">Target Countries</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpi-aircraft">—</div><div class="kpi-lbl">Aircraft Types</div></div>
+  </div>
+</header>
+
+<nav id="nav-band">
+  <div class="nav-tab active" onclick="showPage('info')">GENERAL INFO</div>
+  <div class="nav-tab" onclick="showPage('dataviz')">DATA VISUALIZATION</div>
+  <div class="nav-tab" onclick="showPage('anim')">ANIMATED TIMELINE</div>
+  <div class="nav-tab" onclick="showPage('gloss-ac')">AIRCRAFT GLOSSARY</div>
+  <div class="nav-tab" onclick="showPage('gloss-wpn')">WEAPONS GLOSSARY</div>
+</nav>
+
+<div id="pages">
+
+<!-- ══ INFO PAGE ══ -->
+<div class="page active" id="page-info">
+  <div class="info-hero" style="position:relative;overflow:hidden;min-height:480px;">
+    <video autoplay muted loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.18;z-index:0;pointer-events:none;">
+      <source src="https://upload.wikimedia.org/wikipedia/commons/8/85/Air_Strikes_%26_Dogfights_in_Vietnam_Highlight_Reel_F-105_F-4.webm" type="video/webm"/>
+    </video>
+    <div style="position:relative;z-index:1;width:100%;padding:50px 80px;">
+      <div class="info-hero-text" style="max-width:900px;">
+        <h2>THEATER HISTORY OF<br/><span>OPERATIONS REPORTS</span></h2>
+        <p>Le dataset THOR (Theater History of Operations Reports) est une base de données déclassifiée du Département de la Défense américain compilant l'intégralité des missions aériennes menées pendant la guerre du Vietnam, de 1965 à 1975.</p>
+        <p>Avec plus de <strong style="color:var(--accent2)" id="hero-missions">4,6 millions</strong> de missions enregistrées, il constitue l'une des sources les plus exhaustives jamais publiées sur les opérations aériennes de l'histoire militaire moderne.</p>
+      </div>
+    </div>
+  </div>
+  <div class="info-body">
+
+    <div class="info-sec">
+      <h3>HISTORICAL CONTEXT</h3>
+      <p>La guerre du Vietnam (1955–1975) oppose la République démocratique du Vietnam (Nord Vietnam), soutenue par l'Union soviétique et la Chine, à la République du Vietnam (Sud Vietnam), alliée aux États-Unis et à d'autres nations occidentales. Le conflit s'inscrit dans le contexte plus large de la Guerre froide et de la politique américaine d'endiguement du communisme en Asie du Sud-Est.</p>
+      <p>L'implication aérienne américaine s'intensifie à partir de 1964 avec l'incident du golfe du Tonkin, qui conduit le Congrès américain à autoriser le président Johnson à engager des forces militaires sans déclaration de guerre formelle. Dès 1965, les premières grandes campagnes de bombardements stratégiques sont lancées contre le Nord Vietnam.</p>
+      <p>L'<strong>Operation Rolling Thunder</strong> (mars 1965 – novembre 1968) constitue la première campagne de bombardements massifs contre le Nord Vietnam. Pendant près de quatre ans, des milliers de sorties aériennes sont effectuées chaque semaine, ciblant les infrastructures de transport, les dépôts de carburant, les installations militaires et industrielles. Malgré son intensité sans précédent, l'opération ne parvient pas à briser la volonté de Hanoï ni à interrompre durablement le flux de ravitaillement le long de la piste Hô Chi Minh.</p>
+      <p>La piste Hô Chi Minh, réseau logistique s'étendant sur plusieurs milliers de kilomètres à travers le Laos et le Cambodge, constitue l'une des cibles prioritaires des aviateurs américains tout au long du conflit. Les opérations au Laos, regroupées sous les noms de code <strong>Steel Tiger</strong> et <strong>Tiger Hound</strong>, impliquent des milliers de missions de bombardement et d'interdiction dans le but de couper les lignes d'approvisionnement nord-vietnamiennes vers le Sud.</p>
+      <p>Après l'offensive du Têt de janvier 1968, qui marque un tournant dans l'opinion publique américaine, la politique de <em>Vietnamisation</em> du président Nixon vise à transférer progressivement la responsabilité des combats aux forces sud-vietnamiennes. Les bombardements américains se poursuivent néanmoins, et s'étendent au Cambodge à partir de 1969 avec l'<strong>Operation Menu</strong> — des frappes secrètes contre les sanctuaires du Viet-Cong et de l'armée nord-vietnamienne.</p>
+      <p>En décembre 1972, l'échec des négociations de paix de Paris conduit Nixon à ordonner l'<strong>Operation Linebacker II</strong>, surnommée les "bombardements de Noël". Pendant onze jours, des B-52 Stratofortress et des avions tactiques frappent massivement Hanoï et Haïphong. Cette opération aboutit à la reprise des négociations et à la signature des Accords de Paris en janvier 1973. Au total, les États-Unis auront largué sur le Vietnam, le Laos et le Cambodge une quantité de bombes estimée à plus de <strong style="color:var(--accent2)">7 millions de tonnes</strong> — soit trois fois la quantité totale larguée par tous les belligérants pendant la Seconde Guerre mondiale.</p>
+    </div>
+
+    <div class="info-sec">
+      <h3>THE THOR DATASET THOR</h3>
+      <p>Le dataset THOR est une initiative du Département de la Défense américain visant à numériser et déclassifier les archives des opérations aériennes militaires. La version Vietnam couvre la période 1965–1975 et représente l'un des ensembles de données historiques militaires les plus détaillés jamais rendus publics.</p>
+      <p>Les données ont été compilées à partir des rapports d'opérations originaux conservés dans les archives militaires américaines, puis numérisées, vérifiées et structurées pour une exploitation analytique. Chaque ligne correspond à une mission individuelle avec ses paramètres opérationnels précis : date, heure, coordonnées GPS de la cible, type d'objectif, aéronef engagé, base de départ, munitions utilisées et résultats observés.</p>
+      <p>Le dataset couvre les théâtres d'opérations au <strong>Vietnam du Nord</strong>, au <strong>Vietnam du Sud</strong>, au <strong>Laos</strong> et au <strong>Cambodge</strong>. Les bases de départ documentées s'étendent des aérodromes thaïlandais (Korat, Ubon, Udorn, Takhli) aux bases vietnamiennes (Da Nang, Bien Hoa, Cam Ranh), en passant par les îles Guam et les porte-avions opérant en mer de Chine méridionale depuis les stations Yankee et Dixie.</p>
+      <div class="info-grid">
+        <div class="info-stat"><div class="info-stat-val" id="is-missions">—</div><div class="info-stat-lbl">Missions</div></div>
+        <div class="info-stat"><div class="info-stat-val" id="is-bombs">—</div><div class="info-stat-lbl">Tonnes Dropped</div></div>
+        <div class="info-stat"><div class="info-stat-val" id="is-weapons">—</div><div class="info-stat-lbl">Weapons</div></div>
+        <div class="info-stat"><div class="info-stat-val">1965–1975</div><div class="info-stat-lbl">Période</div></div>
+        <div class="info-stat"><div class="info-stat-val" id="is-countries">—</div><div class="info-stat-lbl">Target Countries</div></div>
+        <div class="info-stat"><div class="info-stat-val" id="is-aircraft">—</div><div class="info-stat-lbl">Aircraft Types</div></div>
+      </div>
+    </div>
+
+    <div class="info-sec">
+      <h3>DATA STRUCTURE</h3>
+      <p>Chaque enregistrement THOR contient une cinquantaine de champs couvrant l'ensemble des paramètres d'une mission aérienne :</p>
+      <p><strong style="color:var(--accent2)">Identification</strong> — Identifiant unique de la mission, date (MSNDATE au format AAAAMMJJ), heure sur cible, identifiant de mission officiel.</p>
+      <p><strong style="color:var(--accent2)">Géolocalisation</strong> — Coordonnées WGS84 de la cible (latitude/longitude en degrés décimaux), pays cible, zone géographique (GEOZONE).</p>
+      <p><strong style="color:var(--accent2)">Aéronef</strong> — Désignation officielle (AIRCRAFT_ROOT), nom complet (AIRCRAFT_ORIGINAL), groupe et escadron, base de décollage (TAKEOFFLOCATION), nombre d'appareils engagés.</p>
+      <p><strong style="color:var(--accent2)">Mission</strong> — Service militaire (MILSERVICE : USAF, USN, USMC, USA), fonction de la mission (MFUNC_DESC), type général (MFUNC_DESC_CLASS), opération soutenue, période du jour.</p>
+      <p><strong style="color:var(--accent2)">Armement</strong> — Type d'arme (WEAPONTYPE), classe d'arme (WEAPONTYPECLASS), poids unitaire en livres (WEAPONTYPEWEIGHT), nombre d'armes larguées (NUMWEAPONSDELIVERED).</p>
+      <p><strong style="color:var(--accent2)">Cible</strong> — Type de cible (TGTTYPE), couverture nuageuse, conditions météorologiques, résultats d'évaluation des dommages (BDA).</p>
+      <p>Les fichiers sources ont été organisés par année (1965 à 1975) et prétraités : colonnes inutilisées supprimées, coordonnées hors zone filtrées, et un échantillonnage de 1 ligne sur 5 appliqué pour optimiser les performances de chargement dans le navigateur.</p>
+    </div>
+
+  </div>
+  <footer class="info-footer">
+    <div style="margin-bottom:8px;color:var(--accent2);font-size:12px;letter-spacing:2px;">// SOURCES & CREDITS</div>
+    <div>Data: <a href="https://www.kaggle.com/datasets/usaf/vietnam-war-bombing-operations" target="_blank">THOR Dataset — US Air Force / Kaggle (domaine public)</a></div>
+    <div>Contexte historique : <a href="https://fr.wikipedia.org/wiki/Guerre_du_Vi%C3%AAtnam" target="_blank">Wikipedia — Guerre du Viêtnam</a> · <a href="https://fr.wikipedia.org/wiki/Op%C3%A9ration_Rolling_Thunder" target="_blank">Operation Rolling Thunder</a> · <a href="https://fr.wikipedia.org/wiki/Op%C3%A9ration_Linebacker_II" target="_blank">Operation Linebacker II</a></div>
+    <div>Archive footage: <a href="https://commons.wikimedia.org/wiki/File:Air_Strikes_%26_Dogfights_in_Vietnam_Highlight_Reel_F-105_F-4.webm" target="_blank">Wikimedia Commons — Air Strikes &amp; Dogfights in Vietnam (domaine public)</a></div>
+    <div style="margin-top:8px;">Visualization: Leaflet.js · D3.js · JavaScript vanilla</div>
+    <div style="margin-top:8px;color:#4a5568;">© Données publiques US DoD — Educational and historical use only</div>
+  </footer>
+</div>
+
+<!-- ══ DATAVIZ PAGE ══ -->
+<div class="page" id="page-dataviz">
+  <aside id="filter-panel">
+    <div class="panel-top">
+      <div class="panel-top-row">// FILTERS <div style="display:flex;align-items:center;gap:6px;"><div class="upd-dot" id="upd-dot"></div><span class="panel-count" id="total-count">—</span></div></div>
+      <button class="btn-reset-all" onclick="resetFilters()">↺ RESET ALL</button>
+    </div>
+
+    <!-- Layers -->
+    <div class="fs open" id="fs-layers"><div class="fs-head" onclick="toggleFs('fs-layers')"><span class="fs-title">MAP LAYERS</span><span class="fs-arrow">›</span></div>
+      <div class="fs-body"><div class="toggle-row">
+        <div class="toggle-btn active" id="mode-points"  onclick="toggleLayer('points')">POINTS</div>
+        <div class="toggle-btn" id="mode-heat"    onclick="toggleLayer('heat')">HEATMAP</div>
+        <div class="toggle-btn" id="mode-flux"    onclick="toggleLayer('flux')">STRIKE RUNS</div>
+      </div></div>
+    </div>
+
+    <!-- Color by -->
+    <div id="color-by-section">
+      <div class="filter-lbl" style="margin-top:0">Color points by</div>
+      <select id="color-by-select" onchange="scheduleUpdate()">
+        <option value="">— Monochrome —</option>
+        <option value="MILSERVICE">Military Service</option>
+        <option value="MFUNC_DESC">Mission Type</option>
+        <option value="_wpnClass">Weapon Class</option>
+        <option value="_acApp">Aircraft Category</option>
+        <option value="TGTCOUNTRY">Target Country</option>
+        <option value="_tgtCat">Target Category</option>
+      </select>
+    </div>
+
+    <!-- Year -->
+    <div class="fs open" id="fs-year"><div class="fs-head" onclick="toggleFs('fs-year')"><span class="fs-title">PERIOD <span class="fs-badge" id="year-fc"></span></span><span class="fs-arrow">›</span></div>
+      <div class="fs-body">
+        <div class="date-row"><span class="date-lbl">FROM</span><input type="text" class="yr-input" id="year-from" placeholder="DD/MM/YYYY" maxlength="10"/></div>
+        <div class="date-row"><span class="date-lbl">TO</span><input type="text" class="yr-input" id="year-to" placeholder="DD/MM/YYYY" maxlength="10"/></div>
+      </div>
+    </div>
+
+    <!-- Mission type -->
+    <div class="fs" id="fs-mfunc"><div class="fs-head" onclick="toggleFs('fs-mfunc')"><span class="fs-title">MISSION TYPE <span class="fs-badge" id="mfunc-fc"></span></span><label class="sw" onclick="event.stopPropagation()" title="Toggle all"><input type="checkbox" id="sw-mfunc" checked onchange="sectionToggleSwitch('mfunc',this.checked)"/><span class="sw-sl"></span></label><span class="fs-arrow">›</span></div>
+      <div class="fs-body"><div class="check-list" id="mfunc-list"></div></div>
+    </div>
+
+    <!-- Mil service -->
+    <div class="fs" id="fs-milservice"><div class="fs-head" onclick="toggleFs('fs-milservice')"><span class="fs-title">MILITARY SERVICE <span class="fs-badge" id="milservice-fc"></span></span><label class="sw" onclick="event.stopPropagation()"><input type="checkbox" id="sw-milservice" checked onchange="sectionToggleSwitch('milservice',this.checked)"/><span class="sw-sl"></span></label><span class="fs-arrow">›</span></div>
+      <div class="fs-body"><div class="check-list" id="milservice-list"></div></div>
+    </div>
+
+    <!-- Target country -->
+    <div class="fs" id="fs-tgtcountry"><div class="fs-head" onclick="toggleFs('fs-tgtcountry')"><span class="fs-title">TARGET COUNTRY <span class="fs-badge" id="tgtcountry-fc"></span></span><label class="sw" onclick="event.stopPropagation()"><input type="checkbox" id="sw-tgtcountry" checked onchange="sectionToggleSwitch('tgtcountry',this.checked)"/><span class="sw-sl"></span></label><span class="fs-arrow">›</span></div>
+      <div class="fs-body"><div class="check-list" id="tgtcountry-list"></div></div>
+    </div>
+
+    <!-- Aircraft -->
+    <div class="fs" id="fs-aircraft"><div class="fs-head" onclick="toggleFs('fs-aircraft')"><span class="fs-title">AIRCRAFT <span class="fs-badge" id="aircraft-fc"></span></span><label class="sw" onclick="event.stopPropagation()"><input type="checkbox" id="sw-acapp" checked onchange="sectionToggleSwitch('acapp',this.checked)"/><span class="sw-sl"></span></label><span class="fs-arrow">›</span></div>
+      <div class="fs-body">
+        <div class="filter-lbl" style="margin-top:0">Category</div>
+        <div class="check-list" id="acapp-list"></div>
+        <div class="filter-lbl">Specific type</div>
+        <select id="actype-select" onchange="scheduleUpdate()"><option value="">— All —</option></select>
+      </div>
+    </div>
+
+    <!-- Target type -->
+    <div class="fs" id="fs-tgt"><div class="fs-head" onclick="toggleFs('fs-tgt')"><span class="fs-title">TARGET TYPE <span class="fs-badge" id="tgtcat-fc"></span></span><label class="sw" onclick="event.stopPropagation()"><input type="checkbox" id="sw-tgtcat" checked onchange="sectionToggleSwitch('tgtcat',this.checked)"/><span class="sw-sl"></span></label><span class="fs-arrow">›</span></div>
+      <div class="fs-body">
+        <div class="check-list" id="tgtcat-list"></div>
+        <div class="filter-lbl" style="margin-top:8px">Specific type</div>
+        <select id="tgttype-select" onchange="scheduleUpdate()"><option value="">— All —</option></select>
+      </div>
+    </div>
+
+    <!-- Weapon -->
+    <div class="fs" id="fs-wpn"><div class="fs-head" onclick="toggleFs('fs-wpn')"><span class="fs-title">WEAPONS <span class="fs-badge" id="wpncat-fc"></span></span><label class="sw" onclick="event.stopPropagation()"><input type="checkbox" id="sw-wpncat" checked onchange="sectionToggleSwitch('wpncat',this.checked)"/><span class="sw-sl"></span></label><span class="fs-arrow">›</span></div>
+      <div class="fs-body">
+        <div class="filter-lbl" style="margin-top:0">Class</div>
+        <div class="check-list" id="wpncat-list"></div>
+        <div class="filter-lbl" style="margin-top:8px">Specific type</div>
+        <select id="weapon-select" onchange="scheduleUpdate()"><option value="">— All —</option></select>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAP -->
+  <div id="map-wrap">
+    <div class="map-lbl" id="map-label">MAP</div>
+    <div id="map"></div>
+    <div id="bm-switcher">
+      <button class="bm-btn active" onclick="setBasemap('positron')">POSITRON</button>
+      <button class="bm-btn" onclick="setBasemap('dark')">DARK</button>
+      <button class="bm-btn" onclick="setBasemap('ortho')">ORTHO</button>
+    </div>
+    <div id="map-layers">
+      <label class="layer-check on"  id="lc-points"  onclick="toggleLayer('points')">POINTS</label>
+      <label class="layer-check"     id="lc-heat"    onclick="toggleLayer('heat')">HEATMAP</label>
+      <label class="layer-check"     id="lc-flux"    onclick="toggleLayer('flux')">STRIKE RUNS</label>
+    </div>
+    <!-- Polygon canvas for spatial selection -->
+    <canvas id="polygon-canvas"></canvas>
+
+    <!-- Polygon selection tool (only shown when POINTS layer active) -->
+    <div id="polygon-select-tool">
+      <button class="poly-btn" id="poly-select-btn" onclick="togglePolygonSelect()" title="Draw Selection Polygon">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polygon points="1,5 5,1 12,4 10,11 3,12" stroke-linejoin="round"/>
+          <circle cx="1" cy="5" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="5" cy="1" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="12" cy="4" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="10" cy="11" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+        </svg>
+        SELECT
+      </button>
+      <button class="poly-btn" id="poly-clear-btn" onclick="clearPolygonSelect()" title="Clear selection">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+          <line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/>
+        </svg>
+        CLEAR
+      </button>
+    </div>
+
+    <!-- Legend stack: flux gradient above, color-by below -->
+    <!-- Flux legend: LEFT side, shown only when Strike Runs active -->
+    <div id="flux-legend">
+      <div class="legend-title">STRIKE RUNS DENSITY</div>
+      <div class="flux-grad-bar"></div>
+      <div class="flux-grad-labels"><span>Low</span><span>High</span></div>
+    </div>
+    <!-- Color-by legend: RIGHT side -->
+    <div id="legend-stack">
+      <div id="map-legend" class="hidden">
+        <div class="legend-title" id="legend-title">LEGEND</div>
+        <div id="legend-items"></div>
+      </div>
+    </div>
+    <button id="stats-toggle-btn" onclick="toggleStatsPanel()">STATS</button>
+  </div>
+
+  <!-- STATS -->
+  <div id="stats-panel">
+    <div id="sp-active-banner">// ACTIVE SELECTION</div>
+    <div id="sp-kpi">
+      <div class="sp-kpi-row">
+        <div class="sp-kpi"><div class="sp-kpi-val" id="sp-missions">—</div><div class="sp-kpi-lbl">Missions</div></div>
+        <div class="sp-kpi"><div class="sp-kpi-val" id="sp-bombs">—</div><div class="sp-kpi-lbl">Tonnes</div></div>
+        <div class="sp-kpi"><div class="sp-kpi-val" id="sp-weapons-kpi">—</div><div class="sp-kpi-lbl">Weapons</div></div>
+      </div>
+      <div class="sp-kpi-row">
+        <div class="sp-kpi"><div class="sp-kpi-val" id="sp-countries">—</div><div class="sp-kpi-lbl">Countries</div></div>
+        <div class="sp-kpi"><div class="sp-kpi-val" id="sp-aircraft-kpi">—</div><div class="sp-kpi-lbl">Aircraft Types</div></div>
+        <div class="sp-kpi"><div class="sp-kpi-val" id="sp-bombing">—</div><div class="sp-kpi-lbl">Strikes</div></div>
+      </div>
+    </div>
+    <div class="sp-sec open" id="sps-year"><div class="sp-sec-hd" onclick="toggleSpSec('sps-year')"><span class="sp-sec-title">MISSIONS / YEAR</span><span class="sp-sec-arr">›</span></div><div class="sp-chart-wrap"><svg id="sp-year" height="120"></svg></div></div>
+    <div class="sp-sec" id="sps-mfunc"><div class="sp-sec-hd" onclick="toggleSpSec('sps-mfunc')"><span class="sp-sec-title">MISSION TYPE</span><span class="sp-sec-arr">›</span></div><div class="sp-chart-wrap"><svg id="sp-mfunc" height="140"></svg></div></div>
+    <div class="sp-sec" id="sps-milservice"><div class="sp-sec-hd" onclick="toggleSpSec('sps-milservice')"><span class="sp-sec-title">MILITARY SERVICE</span><span class="sp-sec-arr">›</span></div><div class="sp-chart-wrap"><svg id="sp-milservice" height="160"></svg></div></div>
+    <div class="sp-sec" id="sps-tgtcountry"><div class="sp-sec-hd" onclick="toggleSpSec('sps-tgtcountry')"><span class="sp-sec-title">TARGET COUNTRY</span><span class="sp-sec-arr">›</span></div><div class="sp-chart-wrap"><svg id="sp-tgtcountry" height="140"></svg></div></div>
+    <div class="sp-sec" id="sps-acapp"><div class="sp-sec-hd" onclick="toggleSpSec('sps-acapp')"><span class="sp-sec-title">AIRCRAFT CATEGORY</span><span class="sp-sec-arr">›</span></div><div class="sp-chart-wrap"><svg id="sp-acapp" height="160"></svg></div></div>
+    <div class="sp-sec" id="sps-tgtcat"><div class="sp-sec-hd" onclick="toggleSpSec('sps-tgtcat')"><span class="sp-sec-title">TARGET TYPE</span><span class="sp-sec-arr">›</span></div><div class="sp-chart-wrap"><svg id="sp-tgtcat" height="160"></svg></div></div>
+    <div class="sp-sec" id="sps-weapon"><div class="sp-sec-hd" onclick="toggleSpSec('sps-weapon')"><span class="sp-sec-title">WEAPON CLASS</span><span class="sp-sec-arr">›</span></div><div class="sp-chart-wrap"><svg id="sp-weapon" height="160"></svg></div></div>
+  </div>
+</div>
+
+<!-- ══ ANIM PAGE ══ -->
+<div class="page" id="page-anim">
+  <div id="anim-maps-row">
+    <div id="anim-map-left"><div class="anim-map-label" id="anim-label-left">POINTS</div><button class="anim-switch-btn" id="anim-left-switch" onclick="switchLeftMap()">→ HEATMAP</button></div>
+    <div id="anim-map-right"><div class="anim-map-label">STRIKE RUNS</div></div>
+  </div>
+  <div id="anim-controls">
+    <div id="anim-year-display">1965</div>
+    <button class="ctrl-btn" id="btn-play" onclick="togglePlay()">▶</button>
+    <button class="ctrl-btn" onclick="resetAnim()">↺</button>
+    <div id="anim-progress"><div id="anim-progress-bar"></div></div>
+    <div style="display:flex;gap:3px;"><button class="gran-btn active" id="gran-year" onclick="setGranularity('year')">YEAR</button><button class="gran-btn" id="gran-month" onclick="setGranularity('month')">MONTH</button><button class="gran-btn" id="gran-week" onclick="setGranularity('week')">WEEK</button></div>
+    <div style="display:flex;gap:3px;"><button class="speed-btn" onclick="setSpeed(3000,this)">0.5×</button><button class="speed-btn active" onclick="setSpeed(1500,this)">1×</button><button class="speed-btn" onclick="setSpeed(700,this)">2×</button><button class="speed-btn" onclick="setSpeed(300,this)">4×</button></div>
+  </div>
+</div>
+
+<!-- ══ GLOSS AIRCRAFT ══ -->
+<div class="page" id="page-gloss-ac">
+  <div class="gloss-page">
+    <h2 style="font-size:22px;margin-bottom:16px;letter-spacing:1px;">AIRCRAFT GLOSSARY <span style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--accent2);margin-left:12px" id="ac-count"></span></h2>
+    <div class="gloss-search">
+      <input type="text" id="ac-search" placeholder="Search..." oninput="renderAcTable()"/>
+      <select class="gloss-fsel" id="ac-app-filter" onchange="renderAcTable()"><option value="">All categories</option></select>
+    </div>
+    <table class="gloss-table"><thead><tr><th>ROOT</th><th>NAME</th><th>TYPE</th><th>CATEGORY</th><th>MISSIONS</th><th>INFO</th></tr></thead><tbody id="ac-tbody"></tbody></table>
+  </div>
+</div>
+
+<!-- ══ GLOSS WEAPONS ══ -->
+<div class="page" id="page-gloss-wpn">
+  <div class="gloss-page">
+    <h2 style="font-size:22px;margin-bottom:16px;letter-spacing:1px;">WEAPONS GLOSSARY <span style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--accent2);margin-left:12px" id="wpn-count"></span></h2>
+    <div class="gloss-search">
+      <input type="text" id="wpn-search" placeholder="Search..." oninput="renderWpnTable()"/>
+      <select class="gloss-fsel" id="wpn-class-filter" onchange="renderWpnTable()"><option value="">All classes</option><option>BOMB</option><option>GUN</option><option>MISSILE</option><option>ROCKET</option><option>SUPPORT</option></select>
+    </div>
+    <table class="gloss-table"><thead><tr><th>CODE</th><th>COMMON NAME</th><th>CLASS</th><th>DESCRIPTION</th><th>USES</th></tr></thead><tbody id="wpn-tbody"></tbody></table>
+  </div>
+</div>
+
+</div><!-- #pages -->
+
+<script src="gloss_data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
